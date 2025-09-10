@@ -1,14 +1,15 @@
-# app.py
 import os
 import threading
 from flask import Flask, request
 from dotenv import load_dotenv
 
+# Impor kelas-kelas dari modul lain
 from telegram_bot import TelegramBot
 from google_sheets import GoogleSheetsClient
 from converters.task_converter import process_telegram_text
 from converters.backlog_converter import BacklogProcessor
 
+# Muat semua variabel konfigurasi dari file .env
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -16,16 +17,22 @@ GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 ADMIN_TELEGRAM_ID = os.getenv("ADMIN_TELEGRAM_ID")
 BOT_USERNAME = os.getenv("BOT_USERNAME")
+WORKSHEET_NAME = os.getenv("TARGET_WORKSHEET_NAME", "Backlog") # Default ke "Backlog" jika tidak ada
 
-if not all([TELEGRAM_TOKEN, GEMINI_API_KEY, GOOGLE_SHEET_ID, WEBHOOK_URL, ADMIN_TELEGRAM_ID, BOT_USERNAME]):
+# Lakukan validasi awal untuk memastikan semua konfigurasi ada
+if not all([TELEGRAM_TOKEN, GEMINI_API_KEY, GOOGLE_SHEET_ID, WEBHOOK_URL, ADMIN_TELEGRAM_ID, BOT_USERNAME, WORKSHEET_NAME]):
     raise ValueError("Satu atau lebih variabel konfigurasi penting tidak ditemukan di file .env. Harap periksa kembali.")
 
+# Inisialisasi semua komponen sistem
 app = Flask(__name__)
 bot = TelegramBot(token=TELEGRAM_TOKEN)
 sheets_client = GoogleSheetsClient(credentials_file='credentials.json', spreadsheet_id=GOOGLE_SHEET_ID)
 backlog_processor = BacklogProcessor(api_key=GEMINI_API_KEY)
 
 def process_message_thread(data):
+    """
+    Fungsi ini menangani seluruh alur kerja di background thread.
+    """
     try:
         message = data['message']
         text = message.get('text', '')
@@ -43,32 +50,34 @@ def process_message_thread(data):
 
         intermediate_df = process_telegram_text(raw_text)
         if intermediate_df.empty:
-            bot.send_message(ADMIN_TELEGRAM_ID, "Proses Gagal: Task Converter tidak menghasilkan data.")
+            bot.send_message(ADMIN_TELEGRAM_ID, f"Proses Gagal: Task Converter tidak menghasilkan data dari teks yang diberikan di worksheet '{WORKSHEET_NAME}'.")
             return
 
-        existing_epics = sheets_client.get_existing_epics(worksheet_name='Backlog')
+        # --- MENGGUNAKAN VARIABEL WORKSHEET_NAME ---
+        existing_epics = sheets_client.get_existing_epics(worksheet_name=WORKSHEET_NAME)
 
         final_df = backlog_processor.run_with_text(
             raw_text=intermediate_df.to_csv(sep='\t', index=False),
             existing_epics=existing_epics
         )
         if final_df is None or final_df.empty:
-            bot.send_message(ADMIN_TELEGRAM_ID, "Proses Gagal: Backlog Converter (LLM) tidak menghasilkan data.")
+            bot.send_message(ADMIN_TELEGRAM_ID, f"Proses Gagal: Backlog Converter (LLM) tidak menghasilkan data untuk worksheet '{WORKSHEET_NAME}'.")
             return
             
+        # --- MENGGUNAKAN VARIABEL WORKSHEET_NAME ---
         rows_added = sheets_client.append_and_sort_data(
-            worksheet_name='Backlog', 
+            worksheet_name=WORKSHEET_NAME, 
             data_df=final_df,
             sort_column_index=1,
             secondary_sort_column_index=5
         )
 
-        feedback_message = f"✅ Sukses! Berhasil menambahkan {rows_added} task baru dan mensortir worksheet."
+        feedback_message = f"✅ Sukses! Berhasil menambahkan {rows_added} task baru dan mensortir worksheet '{WORKSHEET_NAME}'."
         bot.send_message(ADMIN_TELEGRAM_ID, feedback_message)
 
     except Exception as e:
         print(f"Error di thread pemrosesan: {e}")
-        bot.send_message(ADMIN_TELEGRAM_ID, f"❌ Proses Gagal: Terjadi error.\n\nDetail: {e}")
+        bot.send_message(ADMIN_TELEGRAM_ID, f"❌ Proses Gagal: Terjadi error pada worksheet '{WORKSHEET_NAME}'.\n\nDetail: {e}")
 
 @app.route('/webhook', methods=['POST'])
 def telegram_webhook():
@@ -83,5 +92,5 @@ def telegram_webhook():
 if __name__ == "__main__":
     print("Mengatur webhook Telegram...")
     bot.set_webhook(f"{WEBHOOK_URL}/webhook")
-    print("Server Flask siap menerima permintaan...")
+    print(f"Server Flask siap menerima permintaan untuk worksheet: '{WORKSHEET_NAME}'")
     app.run(host='0.0.0.0', port=5001)
