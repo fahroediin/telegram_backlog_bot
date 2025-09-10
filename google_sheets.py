@@ -4,12 +4,32 @@ from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 
 class GoogleSheetsClient:
+    # ... (__init__ tetap sama) ...
     def __init__(self, credentials_file, spreadsheet_id):
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_name(credentials_file, scope)
         self.client = gspread.authorize(creds)
         self.spreadsheet = self.client.open_by_key(spreadsheet_id)
         print("Berhasil terhubung ke Google Sheets.")
+
+    # --- FUNGSI BARU UNTUK MEMBACA EPIC ---
+    def get_existing_epics(self, worksheet_name, epic_column_index=1):
+        """Membaca semua nilai di kolom Epic dan mengembalikan daftar unik."""
+        try:
+            worksheet = self.spreadsheet.worksheet(worksheet_name)
+            print(f"Membaca daftar Epic yang ada dari worksheet '{worksheet_name}'...")
+            # Mengambil semua nilai dari kolom pertama (Epic)
+            all_epics = worksheet.col_values(epic_column_index)
+            # Buang header ("Epic") dan nilai kosong, lalu buat daftar unik
+            existing_epics = sorted(list(set([epic for epic in all_epics[1:] if epic])))
+            print(f"Ditemukan {len(existing_epics)} Epic unik.")
+            return existing_epics
+        except gspread.exceptions.WorksheetNotFound:
+            print(f"Error: Worksheet '{worksheet_name}' tidak ditemukan saat membaca Epic.")
+            return []
+        except Exception as e:
+            print(f"Error saat membaca Epic dari Google Sheets: {e}")
+            return []
 
     def append_and_merge_data(self, worksheet_name, data_df: pd.DataFrame, merge_column_index=1):
         """
