@@ -1,0 +1,42 @@
+# --- Credentials and Sensitive Files ---
+# SANGAT PENTING: Jangan pernah commit file-file ini ke repository Anda.
+# File ini berisi API key dan token rahasia.
+.env
+credentials.json
+
+# --- Python Artifacts ---
+# Byte-compiled / optimized / C extension files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment folders
+# Tambahkan nama folder virtual environment Anda di sini jika berbeda
+venv/
+env/
+.venv/
+.env/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# --- Project-Specific Generated Files ---
+# Folder untuk menyimpan file CSV yang diunduh (jika ada)
+downloads/
+
+# --- IDE and Editor Configuration ---
+# Visual Studio Code
+.vscode/
+
+# JetBrains IDEs (PyCharm, etc.)
+.idea/
+
+# --- Operating System Files ---
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
