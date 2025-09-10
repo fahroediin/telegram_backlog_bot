@@ -15,8 +15,8 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-ADMIN_TELEGRAM_ID = os.getenv("ADMIN_TELEGRAM_ID")
-BOT_USERNAME = os.getenv("BOT_USERNAME") # Tambahkan username bot Anda di .env
+ADMIN_TELEGRAM_ID = os.getenv("ADMIN_TELEGRAM_ID") # ID Anda sudah ada di sini
+BOT_USERNAME = os.getenv("BOT_USERNAME")
 
 # Inisialisasi
 app = Flask(__name__)
@@ -30,8 +30,18 @@ def process_message_thread(data):
         message = data['message']
         text = message.get('text', '')
         chat_id = message['chat']['id']
-        user_id = message['from']['id']
-        
+        user_id_from_message = str(message['from']['id']) # Ambil ID pengguna yang mengirim pesan
+
+        # --- LANGKAH PREVENTIF: VALIDASI USER ID ---
+        # Bandingkan ID pengirim dengan ID admin yang diizinkan dari file .env
+        if user_id_from_message != ADMIN_TELEGRAM_ID:
+            print(f"Akses ditolak untuk User ID: {user_id_from_message}. Hanya admin ({ADMIN_TELEGRAM_ID}) yang diizinkan.")
+            # (Opsional) Kirim pesan penolakan ke pengguna yang tidak sah
+            # bot.send_message(chat_id, f"Maaf, hanya admin yang dapat menggunakan bot ini.")
+            return # Hentikan proses di sini
+
+        print(f"Akses diberikan untuk admin (User ID: {user_id_from_message}). Memulai proses...")
+
         # 1. Ekstrak teks mentah (buang baris mention)
         lines = text.strip().split('\n')
         raw_text_lines = [line for line in lines if f"@{BOT_USERNAME}" not in line]
@@ -49,11 +59,15 @@ def process_message_thread(data):
             bot.send_message(ADMIN_TELEGRAM_ID, "Proses Gagal: Backlog Converter (LLM) tidak menghasilkan data.")
             return
             
-        # 4. Tambahkan ke Google Sheets
-        rows_added = sheets_client.append_data(worksheet_name='Backlog', data_df=final_df)
+        # 4. Tambahkan dan Merge di Google Sheets
+        rows_added = sheets_client.append_and_merge_data(
+            worksheet_name='Backlog', 
+            data_df=final_df,
+            merge_column_index=1
+        )
 
         # 5. Kirim feedback
-        feedback_message = f"✅ Sukses! Berhasil menambahkan {rows_added} task baru ke Google Sheets."
+        feedback_message = f"✅ Sukses! Berhasil menambahkan dan memformat {rows_added} task baru di Google Sheets."
         bot.send_message(ADMIN_TELEGRAM_ID, feedback_message)
 
     except Exception as e:
@@ -65,14 +79,11 @@ def telegram_webhook():
     data = request.get_json()
     if 'message' in data and 'text' in data['message']:
         text = data['message']['text']
-        # Cek apakah bot di-mention
         if BOT_USERNAME and f"@{BOT_USERNAME}" in text:
-            # Jalankan proses di thread terpisah
             thread = threading.Thread(target=process_message_thread, args=(data,))
             thread.start()
     return 'OK', 200
 
 if __name__ == "__main__":
-    # Atur webhook saat server pertama kali dijalankan
     bot.set_webhook(f"{WEBHOOK_URL}/webhook")
     app.run(host='0.0.0.0', port=5001)
