@@ -89,7 +89,7 @@ def process_telegram_text(raw_text: str) -> pd.DataFrame:
         last_seen_date = dates['last_seen_date']
         
         short_task = summarize_task(full_description)
-        status = 'In Progress'
+        status = 'InProgress'
         end_date = ''
 
         if last_date and last_seen_date < last_date:

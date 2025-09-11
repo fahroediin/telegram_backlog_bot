@@ -23,15 +23,14 @@ class GoogleSheetsClient:
             print(f"Error saat membaca Epic dari Google Sheets: {e}")
             return []
 
-    def append_and_sort_data(self, worksheet_name, data_df: pd.DataFrame, sort_column_index=1, secondary_sort_column_index=5):
+    def append_data(self, worksheet_name, data_df: pd.DataFrame, sort_enabled=False, primary_sort_col=5, secondary_sort_col=1):
         """
-        Menambahkan data ke worksheet dan kemudian MENSORTIR seluruh sheet
-        berdasarkan kolom utama (Epic) dan kolom sekunder (Start Date).
+        Menambahkan data dan secara opsional mensortir seluruh sheet.
+        Prioritas sortir utama sekarang adalah tanggal.
         """
         try:
             worksheet = self.spreadsheet.worksheet(worksheet_name)
             
-            # 1. Tambahkan data baru di akhir
             data_list = data_df.fillna('').values.tolist()
             if not data_list:
                 print("Tidak ada data untuk ditambahkan.")
@@ -40,19 +39,23 @@ class GoogleSheetsClient:
             worksheet.append_rows(data_list, value_input_option='USER_ENTERED')
             print(f"Berhasil menambahkan {len(data_list)} baris baru.")
 
-            # 2. Kirim perintah untuk mensortir seluruh sheet
-            # Dapatkan jumlah total baris untuk menentukan rentang sortir
+            # Cek apakah fitur sortir diaktifkan
+            if not sort_enabled:
+                print("Sortir otomatis dinonaktifkan. Proses selesai.")
+                return len(data_list)
+
+            # Lanjutkan dengan sortir jika diaktifkan
             total_rows = len(worksheet.get_all_values())
             if total_rows > 1:
-                print(f"Mensortir worksheet berdasarkan kolom {sort_column_index} (Epic) dan {secondary_sort_column_index} (Start Date)...")
+                print(f"Mensortir worksheet berdasarkan kolom {primary_sort_col} (Start Date) lalu {secondary_sort_col} (Epic)...")
                 
-                # Tentukan rentang dari A2 hingga kolom terakhir dan baris terakhir
                 last_column_letter = gspread.utils.rowcol_to_a1(1, worksheet.col_count)[0]
                 sort_range = f'A2:{last_column_letter}{total_rows}'
                 
+                # Urutkan berdasarkan Start Date (utama), lalu Epic (sekunder)
                 worksheet.sort(
-                    (sort_column_index, 'asc'), 
-                    (secondary_sort_column_index, 'asc'), 
+                    (primary_sort_col, 'asc'), 
+                    (secondary_sort_col, 'asc'), 
                     range=sort_range
                 )
             
