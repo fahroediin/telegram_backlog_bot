@@ -25,7 +25,7 @@ if not all([TELEGRAM_TOKEN, GEMINI_API_KEY, GOOGLE_SHEET_ID, WEBHOOK_URL, ADMIN_
 app = Flask(__name__)
 bot = TelegramBot(token=TELEGRAM_TOKEN)
 sheets_client = GoogleSheetsClient(credentials_file='credentials.json', spreadsheet_id=GOOGLE_SHEET_ID)
-backlog_processor = BacklogProcessor(api_key=GEMINI_API_KEY)
+backlog_processor = BacklogProcessor(api_keys_string=GEMINI_API_KEY)
 
 def process_message_thread(data):
     try:
@@ -39,10 +39,15 @@ def process_message_thread(data):
 
         print(f"Akses diberikan untuk admin. Memulai proses update status...")
 
-        # 1. BACA DATA DAN BERSIHKAN
+        # 1. BACA DATA DAN TANGANI KASUS KOSONG
         existing_df = sheets_client.get_all_data_as_df(worksheet_name=WORKSHEET_NAME)
-        if not existing_df.empty:
-            required_cols = ['Epic', 'Backlog', 'PIC', 'Status', 'Start Date', 'End Date']
+        required_cols = ['Epic', 'Backlog', 'PIC', 'Status', 'Start Date', 'End Date']
+
+        if existing_df.empty:
+            print("Worksheet kosong. Menginisialisasi DataFrame kosong.")
+            done_tasks_df = pd.DataFrame(columns=required_cols)
+            inprogress_tasks_df = pd.DataFrame(columns=required_cols)
+        else:
             for col in required_cols:
                 if col not in existing_df.columns:
                     raise KeyError(f"Kolom '{col}' tidak ditemukan di Google Sheet.")
@@ -52,8 +57,8 @@ def process_message_thread(data):
             existing_df['Canonical Backlog'] = existing_df['Backlog'].apply(create_canonical_text)
             existing_df.drop_duplicates(subset=['PIC', 'Canonical Backlog'], keep='last', inplace=True)
 
-        done_tasks_df = existing_df[existing_df['Status'] == 'Done'].copy().reset_index(drop=True)
-        inprogress_tasks_df = existing_df[existing_df['Status'] == 'InProgress'].copy().reset_index(drop=True)
+            done_tasks_df = existing_df[existing_df['Status'] == 'Done'].copy().reset_index(drop=True)
+            inprogress_tasks_df = existing_df[existing_df['Status'] == 'InProgress'].copy().reset_index(drop=True)
 
         # 2. PROSES INPUT BARU DARI TELEGRAM
         lines = text.strip().split('\n')
@@ -68,7 +73,7 @@ def process_message_thread(data):
         if not intermediate_df.empty:
             intermediate_df.drop_duplicates(subset=['PIC', 'Canonical Backlog'], keep='first', inplace=True)
 
-        # 3. DAPATKAN EPIC UNTUK TASK BARU (SATU PER SATU UNTUK KEANDALAN MAKSIMAL)
+        # 3. DAPATKAN EPIC UNTUK TASK BARU (SATU PER SATU)
         existing_epics = list(existing_df['Epic'].unique()) if not existing_df.empty else []
         
         all_processed_tasks = []
@@ -93,8 +98,16 @@ def process_message_thread(data):
         new_tasks_with_epics_df = pd.concat(all_processed_tasks, ignore_index=True)
 
         # 4. LOGIKA PERBANDINGAN MENGGUNAKAN KUNCI KANONIS
-        inprogress_tasks_df['task_key'] = inprogress_tasks_df['PIC'].astype(str) + ' | ' + inprogress_tasks_df['Canonical Backlog'].astype(str)
-        new_tasks_with_epics_df['task_key'] = new_tasks_with_epics_df['PIC'].astype(str) + ' | ' + new_tasks_with_epics_df['Canonical Backlog'].astype(str)
+        # --- PERBAIKAN KUNCI: Tambahkan pemeriksaan 'if not empty' ---
+        if not inprogress_tasks_df.empty:
+            inprogress_tasks_df['task_key'] = inprogress_tasks_df['PIC'].astype(str) + ' | ' + inprogress_tasks_df['Canonical Backlog'].astype(str)
+        else:
+            inprogress_tasks_df['task_key'] = None # Tambahkan kolom kosong jika tidak ada data
+
+        if not new_tasks_with_epics_df.empty:
+            new_tasks_with_epics_df['task_key'] = new_tasks_with_epics_df['PIC'].astype(str) + ' | ' + new_tasks_with_epics_df['Canonical Backlog'].astype(str)
+        else:
+            new_tasks_with_epics_df['task_key'] = None
 
         merged_df = pd.merge(
             inprogress_tasks_df, new_tasks_with_epics_df,

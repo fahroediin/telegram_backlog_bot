@@ -22,10 +22,22 @@ def convert_mixed_language_date(date_str: str) -> str | None:
         return date_str
 
 class BacklogProcessor:
-    def __init__(self, api_key: str):
-        if not api_key:
-            raise ValueError("API Key tidak ditemukan.")
-        genai.configure(api_key=api_key)
+    def __init__(self, api_keys_string: str):
+        if not api_keys_string:
+            raise ValueError("String API Key tidak ditemukan.")
+        # --- PERUBAHAN UTAMA: Tangani daftar key ---
+        self.api_keys = [key.strip() for key in api_keys_string.split(',')]
+        self.current_key_index = 0
+        print(f"BacklogProcessor diinisialisasi dengan {len(self.api_keys)} API key.")
+
+    def _rotate_and_configure_api_key(self):
+        """Memilih key berikutnya dalam daftar dan mengonfigurasi API."""
+        # Pindah ke key berikutnya
+        self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+        
+        current_key = self.api_keys[self.current_key_index]
+        print(f"Menggunakan API Key #{self.current_key_index + 1}...")
+        genai.configure(api_key=current_key)
 
     def _create_prompt(self, raw_backlog_text: str, existing_epics: list[str]) -> str:
         epics_list_str = ", ".join(f'"{epic}"' for epic in existing_epics)
@@ -57,6 +69,9 @@ class BacklogProcessor:
         return prompt
 
     def _call_llm(self, prompt: str) -> str:
+        # --- PERUBAHAN UTAMA: Lakukan rotasi sebelum setiap panggilan ---
+        self._rotate_and_configure_api_key()
+        
         print("Mengirim permintaan ke Google Gemini...")
         try:
             model = genai.GenerativeModel('gemini-2.5-flash') 
@@ -104,15 +119,10 @@ class BacklogProcessor:
         structured_data = self._parse_llm_response_to_df(llm_result)
         if structured_data.empty: return None
         
-        # --- PERBAIKAN KUNCI: Gabungkan kembali 'Canonical Backlog' ---
-        # Pastikan jumlah baris cocok untuk menghindari error
         if len(structured_data) == len(intermediate_df):
-            # Ambil kolom 'Canonical Backlog' dari DataFrame input asli
-            # dan tambahkan ke DataFrame hasil dari LLM.
             structured_data['Canonical Backlog'] = intermediate_df['Canonical Backlog'].values
         else:
             print("Peringatan: Jumlah baris dari LLM tidak cocok dengan input. 'Canonical Backlog' tidak dapat digabungkan kembali.")
-            # Jika tidak cocok, kita tidak bisa melanjutkan karena perbandingan akan gagal.
             return None
         
         if 'Start Date' in structured_data.columns:
