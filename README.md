@@ -2,45 +2,66 @@
 
 Otomatisasi Proses Grooming Backlog Harian dari Telegram ke Google Sheets Menggunakan AI.
 
-Bot ini dirancang untuk mengubah laporan harian yang dikirim melalui grup Telegram menjadi baris data yang terstruktur rapi di dalam Google Sheets. Proses ini didukung oleh AI (Google Gemini) untuk mengkategorikan setiap tugas ke dalam Epic yang relevan secara otomatis.
+Bot ini dirancang untuk mengubah laporan harian yang dikirim melalui grup Telegram menjadi baris data yang terstruktur rapi di dalam Google Sheets. Proses ini didukung oleh AI (Google Gemini) untuk mengkategorikan setiap tugas ke dalam Epic yang relevan secara otomatis, serta mengelola status tugas dari waktu ke waktu.
 
 ---
 
 ## Daftar Isi
+- [Preview](#preview)
 - [Gambaran Umum](#gambaran-umum)
 - [Fitur Utama](#fitur-utama)
 - [Arsitektur Sistem](#arsitektur-sistem)
 - [Prasyarat](#prasyarat)
 - [Langkah-langkah Instalasi](#langkah-langkah-instalasi)
-- [Cara Menjalankan](#cara-menjalankan)
+- [Cara Menjalankan (Development)](#cara-menjalankan-development)
+- [Deployment (Production)](#deployment-production)
 - [Struktur Proyek](#struktur-proyek)
+
+---
+
+## Preview
+
+### 1. Input di Grup Telegram
+Cukup kirim laporan harian dalam format teks sederhana dan mention bot di akhir.
+
+![Contoh Input Laporan Harian di Telegram](screenshot/task_telegram.png)
+
+### 2. Hasil Otomatis di Google Sheets
+Bot akan memproses, mengkategorikan, mengupdate status, dan mensortir seluruh spreadsheet secara otomatis.
+
+![Contoh Hasil Akhir di Google Sheets](screenshot/backlog.png)
 
 ---
 
 ## Gambaran Umum
 
-Setiap hari, laporan tugas dikirim ke grup Telegram dalam format teks bebas. Proses manual untuk menyalin, memformat, mengkategorikan, dan memasukkan data ini ke Google Sheets memakan waktu dan rentan terhadap kesalahan.
+Setiap hari, laporan tugas dikirim ke grup Telegram. Proses manual untuk menyalin, memformat, mengkategorikan, dan mengupdate status di Google Sheets memakan waktu dan rentan terhadap kesalahan.
 
 Bot ini mengotomatiskan seluruh alur kerja tersebut:
-1.  **Mendengarkan**: Bot akan aktif ketika di-mention di dalam grup Telegram.
-2.  **Memproses**: Pesan teks mentah akan diproses oleh **Task Converter** untuk diubah menjadi format data awal (Judul, Deskripsi, PIC, Tanggal).
-3.  **Menganalisis**: Data awal kemudian dikirim ke **Backlog Converter** yang menggunakan Google Gemini untuk menganalisis setiap tugas dan menetapkan **Epic** yang sesuai.
-4.  **Menyimpan**: Data final yang sudah lengkap dengan Epic akan ditambahkan secara otomatis ke baris baru di Google Sheets.
-5.  **Menggabungkan Sel**: Bot akan secara cerdas menggabungkan (merge) sel di kolom Epic untuk merapikan tampilan visual di Google Sheets.
-6.  **Memberi Feedback**: Bot akan mengirim notifikasi pribadi ke admin untuk mengonfirmasi bahwa proses telah berhasil.
+1.  **Mendengarkan**: Bot akan aktif ketika di-mention oleh admin di dalam grup Telegram.
+2.  **Membaca & Membandingkan**: Bot membaca seluruh data "InProgress" yang ada di Google Sheets.
+3.  **Memproses**: Pesan teks mentah dari Telegram diproses oleh **Task Converter** menjadi data terstruktur.
+4.  **Menganalisis**: Setiap tugas baru dikirim ke **Backlog Converter** yang menggunakan Google Gemini untuk menetapkan **Epic** yang konsisten, berdasarkan daftar Epic yang sudah ada.
+5.  **Update Status & Simpan**: Bot membandingkan laporan baru dengan data lama. Task yang tidak lagi dilaporkan akan diubah statusnya menjadi "Done". Task baru akan ditambahkan.
+6.  **Mengorganisir**: Seluruh isi worksheet akan ditulis ulang dan disortir secara otomatis berdasarkan tanggal dan Epic.
+7.  **Memberi Feedback**: Bot akan mengirim notifikasi pribadi ke admin untuk mengonfirmasi bahwa proses telah berhasil.
 
 ## Fitur Utama
 
--   ✅ **Otomatisasi Penuh**: Mengubah teks tidak terstruktur dari Telegram menjadi data terstruktur di Google Sheets tanpa intervensi manual.
--   ✅ **Kategorisasi Cerdas dengan AI**: Menggunakan Google Gemini untuk menetapkan Epic secara dinamis, baik menggunakan Epic yang sudah ada maupun membuat yang baru.
--   ✅ **Integrasi Real-time ke Google Sheets**: Data baru langsung ditambahkan ke bagian bawah spreadsheet, siap untuk dianalisis.
--   ✅ **Pemformatan Otomatis**: Secara otomatis menggabungkan sel Epic yang sama untuk visualisasi yang bersih dan rapi.
--   ✅ **Notifikasi Feedback Pribadi**: Memberikan konfirmasi sukses atau laporan error langsung ke admin melalui pesan pribadi.
+-   ✅ **Otomatisasi Penuh**: Mengubah laporan harian menjadi spreadsheet yang terorganisir tanpa intervensi manual.
+-   ✅ **Manajemen Status Otomatis**: Secara cerdas mendeteksi task yang tidak lagi dilaporkan dan mengubah statusnya dari `InProgress` menjadi `Done` serta mengisi `End Date`.
+-   ✅ **Kategorisasi Cerdas dengan AI**: Menggunakan Google Gemini untuk menetapkan Epic secara dinamis, dengan memprioritaskan Epic yang sudah ada untuk menjaga konsistensi.
+-   ✅ **Pengorganisasian Otomatis**: Menambahkan data baru dan secara otomatis mensortir seluruh spreadsheet berdasarkan tanggal dan Epic, menjaga data tetap rapi.
+-   ✅ **Keamanan**: Hanya merespons mention dari ID Telegram admin yang sudah ditentukan di konfigurasi.
+-   ✅ **Manajemen Kuota**: Mendukung rotasi beberapa API key Gemini untuk menghindari batas kuota dan mendistribusikan beban.
+-   ✅ **Andal**: Dibangun untuk berjalan 24/7 di server menggunakan PM2 dan Nginx.
 
 ## Arsitektur Sistem
 
 -   **Antarmuka**: Bot Telegram
 -   **Backend Server**: Aplikasi Flask (Python) yang berjalan sebagai webhook.
+-   **Process Manager**: PM2
+-   **Reverse Proxy**: Nginx
 -   **Processing Core**:
     -   `Task Converter`: Modul Python untuk parsing awal teks Telegram.
     -   `Backlog Converter`: Modul Python yang terintegrasi dengan Google Gemini untuk kategorisasi Epic.
@@ -52,10 +73,12 @@ Bot ini mengotomatiskan seluruh alur kerja tersebut:
 ## Prasyarat
 
 Sebelum memulai, pastikan Anda memiliki:
--   Python 3.8 atau lebih tinggi.
+-   Server VPS (misalnya, AlmaLinux) dengan akses root/sudo.
+-   Python 3.11 atau lebih tinggi.
+-   Node.js dan npm (untuk menginstal PM2).
 -   Akun Telegram.
--   Akun Google Cloud dengan penagihan (billing) aktif (untuk menghindari batas kuota API).
--   [Ngrok](https://ngrok.com/download) untuk development lokal.
+-   Akun Google Cloud dengan penagihan (billing) aktif.
+-   [Ngrok](https://ngrok.com/download) (opsional, untuk development lokal).
 
 ## Langkah-langkah Instalasi
 
@@ -65,70 +88,87 @@ Sebelum memulai, pastikan Anda memiliki:
     cd telegram_backlog_bot
     ```
 
-2.  **Buat Virtual Environment** (Sangat Direkomendasikan)
+2.  **Install Python 3.11 & Node.js (jika belum ada di server)**
     ```bash
-    python -m venv venv
-    source venv/bin/activate  # Di Windows: venv\Scripts\activate
+    # Untuk AlmaLinux
+    sudo dnf install python3.11 python3.11-pip -y
+    sudo dnf install nodejs -y 
     ```
 
-3.  **Install Dependencies**
+3.  **Install PM2**
+    ```bash
+    npm install pm2 -g
+    pm2 startup 
+    # Jalankan perintah yang diberikan oleh pm2 startup
+    ```
+
+4.  **Buat Virtual Environment**
+    ```bash
+    python3.11 -m venv venv
+    source venv/bin/activate
+    ```
+
+5.  **Install Dependencies**
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Setup Kredensial**
+6.  **Setup Kredensial**
+    Ikuti langkah-langkah di `README` sebelumnya untuk mendapatkan semua token dan file kredensial.
 
-    a. **Telegram**:
-       - Buka Telegram dan cari **@BotFather**.
-       - Buat bot baru dengan perintah `/newbot`.
-       - Salin **Token API** yang diberikan.
-       - Matikan mode privasi grup: `/mybots` -> pilih bot Anda -> `Bot Settings` -> `Group Privacy` -> `Turn off`.
-
-    b. **Google Sheets & Drive API**:
-       - Buka [Google Cloud Console](https://console.cloud.google.com/) dan buat proyek baru.
-       - Aktifkan **Google Drive API** dan **Google Sheets API**.
-       - Buat **Service Account**:
-         - Di menu "Credentials", buat "Service Account". Beri peran **"Editor"**.
-         - Setelah dibuat, masuk ke service account, klik tab "Keys" -> "Add Key" -> "Create new key".
-         - Pilih **JSON** dan unduh filenya. **Ganti nama file ini menjadi `credentials.json`** dan letakkan di folder root proyek.
-       - **Bagikan Google Sheet Anda**: Buka Google Sheet, klik "Share", dan bagikan dengan alamat email service account (terlihat seperti `...gserviceaccount.com`). Beri akses **"Editor"**.
-
-    c. **Google Gemini API**:
-       - Buka [Google AI Studio](https://aistudio.google.com/) dan dapatkan **API Key** Anda.
-
-    d. **Telegram Admin ID**:
-       - Buka Telegram dan cari **@userinfobot**.
-       - Kirim `/start` untuk mendapatkan ID numerik Anda.
-
-5.  **Konfigurasi File `.env`**
+7.  **Konfigurasi File `.env`**
     -   Buat salinan dari `.env.example` dan beri nama `.env`.
-    -   Buka file `.env` dan isi semua nilai yang diperlukan sesuai dengan kredensial yang telah Anda kumpulkan.
+    -   Buka file `.env` dan isi semua nilainya.
 
-## Cara Menjalankan
+## Cara Menjalankan (Development)
+
+Untuk testing di mesin lokal Anda.
 
 1.  **Jalankan Ngrok**
-    Buka terminal baru dan jalankan perintah ini untuk mengekspos port 5001 (port yang digunakan oleh Flask) ke internet.
     ```bash
     ngrok http 5001
     ```
-    Ngrok akan memberikan URL `https` (misalnya: `https://1a2b-3c4d.ngrok-free.app`).
+    Salin URL `https` yang diberikan.
 
 2.  **Update `.env`**
-    -   Salin URL `https` dari Ngrok.
-    -   Tempelkan ke variabel `WEBHOOK_URL` di dalam file `.env` Anda.
+    -   Tempelkan URL Ngrok ke variabel `WEBHOOK_URL`.
 
 3.  **Jalankan Server Flask**
-    Di terminal utama Anda (dengan virtual environment aktif), jalankan aplikasi:
     ```bash
+    # Pastikan venv aktif
     python app.py
     ```
-    Server akan berjalan dan secara otomatis mengatur webhook Telegram.
+
+## Deployment (Production)
+
+Untuk menjalankan bot 24/7 di server VPS Anda.
+
+1.  **Buat File Konfigurasi PM2**
+    Buat file `ecosystem.config.js` di root proyek Anda.
+    ```javascript
+    module.exports = {
+      apps : [{
+        name   : "backlog-bot",
+        script : "app.py",
+        interpreter: "/path/to/your/project/venv/bin/python3.11", // Gunakan path absolut
+      }]
+    }
+    ```
+
+2.  **Mulai Aplikasi dengan PM2**
+    ```bash
+    pm2 start ecosystem.config.js
+    pm2 save
+    ```
+
+3.  **Konfigurasi Nginx**
+    -   Buat file konfigurasi di `/etc/nginx/conf.d/backlogbot.conf`.
+    -   Isi dengan konfigurasi reverse proxy yang mengarah ke `http://127.0.0.1:5001`.
+    -   Restart Nginx: `sudo systemctl restart nginx`.
 
 4.  **Gunakan Bot di Telegram**
-    -   Undang bot Anda ke grup Telegram yang diinginkan.
-    -   Kirim pesan laporan harian Anda.
-    -   Di akhir pesan, **mention bot Anda** (misal: `@NamaBotAnda`).
-    -   Tunggu beberapa saat, dan Anda akan menerima notifikasi pribadi tentang hasilnya.
+    -   Undang bot ke grup.
+    -   Kirim laporan harian dan mention bot di akhir.
 
 ## Struktur Proyek
 
@@ -141,8 +181,13 @@ telegram_backlog_bot/
 │   ├── __init__.py
 │   ├── task_converter.py   # Mengubah teks mentah Telegram menjadi data terstruktur awal.
 │   └── backlog_converter.py# Menggunakan LLM untuk menambahkan Epic ke data.
-├── credentials.json        # Kredensial Service Account Google (JANGAN DI-COMMIT).
+├── screenshot/             # Folder berisi gambar preview.
+│   ├── backlog.png
+│   └── task_telegram.png
+├── ecosystem.config.js     # File konfigurasi untuk PM2.
+├── credentials.json        # Kredensial Service Account Google (diabaikan oleh .gitignore).
 ├── requirements.txt        # Daftar library Python yang dibutuhkan.
-├── .env                    # File konfigurasi untuk semua kredensial (JANGAN DI-COMMIT).
+├── .env                    # File konfigurasi untuk semua kredensial (diabaikan oleh .gitignore).
 └── .env.example            # Template untuk file .env.
 ```
+````
