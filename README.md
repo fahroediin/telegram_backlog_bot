@@ -29,7 +29,7 @@ Cukup kirim laporan harian dalam format teks sederhana dan mention bot di akhir.
 ### 2. Hasil Otomatis di Google Sheets
 Bot akan memproses, mengkategorikan, mengupdate status, dan mensortir seluruh spreadsheet secara otomatis.
 
-![Contoh Hasil Akhir di Google Sheets](screenshot/backlog.png)
+![Contoh Hasil Akhir di Google Sheets](screenshot/product_backlog.png)
 
 ---
 
